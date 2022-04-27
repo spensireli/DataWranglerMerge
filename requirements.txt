@@ -1,0 +1,2 @@
+awswrangler==2.15.1
+argparse==1.4.0
