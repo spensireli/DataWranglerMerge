@@ -37,9 +37,6 @@ def read_csv_data():
         return df
 
 def output_func(df):
-    print(df)
-    print(remote_bucket)
-    print(local_write)
     if remote_bucket:
         wr.s3.to_csv(df, path=remote_bucket)
         log.info('CSV is now available at %s' % remote_bucket)
