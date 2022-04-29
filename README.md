@@ -3,7 +3,8 @@
 This application takes multiple .csv files located in AWS S3 and merges them into a single file. The output of this file can be local or remote.
 
 ```
-usage: dw_merge.py [-h] [-b BUCKETPATH] [-r REMOTEWRITE] [-l LOCALWRITE] [-c CHUNKSIZE] [-s DATASET]
+usage: dw_merge.py [-h] [-b BUCKETPATH] [-r REMOTEWRITE] [-l LOCALWRITE] [-c CHUNKSIZE] [-s DATASET] [-u USECOLS] [--extra-py-files EXTRA_PY_FILES] [--scriptLocation SCRIPTLOCATION] [--job-bookmark-option JOB_BOOKMARK_OPTION]
+                   [--job-language JOB_LANGUAGE] [--connection-names CONNECTION_NAMES]
 
 Uses awswrangler to join csv files located in s3.
 
@@ -19,4 +20,6 @@ optional arguments:
                         If specified, return an generator where chunksize is the number of rows to include in each chunk. Default is 100.
   -s DATASET, --dataset DATASET
                         If True read a CSV dataset instead of simple file(s) loading all the related partitions as columns. Default is False.
+  -u USECOLS, --usecols USECOLS
+                        If used return a subset of the columns.. For example firstName,lastName,dob
 ```

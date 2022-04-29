@@ -7,12 +7,24 @@ import awswrangler as wr
 import sys
 import logging
 
+
 parser = argparse.ArgumentParser(description='Uses awswrangler to join csv files located in s3.')
 parser.add_argument('-b', '--bucketpath', type=str, help='S3 bucket with the path to .csv files. For example s3://remote-bucket/prefix/')
 parser.add_argument('-r', '--remotewrite', type=str, help='S3 bucket and file name to write to. For example s3://remote-bucket/prefix/')
 parser.add_argument('-l', '--localwrite', type=str, help='Local directory path and filename to write to. ')
-parser.add_argument('-c', '--chunksize', type=int, default=100, help='If specified, return an generator where chunksize is the number of rows to include in each chunk. Default is 100. ')
+parser.add_argument('-c', '--chunksize', type=int, default=10000, help='If specified, return an generator where chunksize is the number of rows to include in each chunk. Default is 100. ')
 parser.add_argument('-s', '--dataset', type=bool, default=False, help='If True read a CSV dataset instead of simple file(s) loading all the related partitions as columns. Default is False.')
+parser.add_argument('-u', '--usecols', action='append', help='If used return a subset of the columns.. For example firstName,lastName,dob')
+
+
+# Not used, but included because Glue passes these arguments in
+parser.add_argument('--extra-py-files', type=str, required=False, default=None, help="NOT USED")
+parser.add_argument('--scriptLocation', type=str, required=False, default=None, help="NOT USED")
+parser.add_argument('--job-bookmark-option', type=str, required=False, default=None, help="NOT USED")
+parser.add_argument('--job-language', type=str, required=False, default=None, help="NOT USED")
+parser.add_argument('--connection-names', type=str, required=False, default=None, help="NOT USED")
+
+
 
 args = parser.parse_args()
 bucket_path = args.bucketpath
@@ -20,6 +32,7 @@ remote_bucket = args.remotewrite
 local_write = args.localwrite
 chunk_size = args.chunksize
 dataset = args.dataset
+usecols = args.usecols
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -30,26 +43,34 @@ def read_csv_data():
     if bucket_path:
         log.info("Chunksize Set to: %s" % chunk_size)
         log.info("Dataset Used: %s" % dataset)
-        log.info('Reading data from %s' % bucket_path)
-        # Looks like chunking is returned and needs to be itnerated upon.
-        # df = wr.s3.read_csv(bucket_path, chunksize=chunk_size)
-        df = wr.s3.read_csv(bucket_path)
-        return df
+        log.info('Reading data from: %s' % bucket_path)
+        log.info('Usecols: %s' % usecols)
+
+        total_records = 0
+
+        df = wr.s3.read_csv(bucket_path, chunksize=chunk_size,header=0, usecols=usecols)
+        for x in df:
+            rows = len(x.index)
+            log.info('Found Rows: %s' % rows)
+            total_records = total_records + rows
+            log.info('Found Columns: %s' % len(x.columns))
+            output_func(x)
+        log.info('-----------------------')
+        log.info('Total records processed: %s' % total_records)
 
 def output_func(df):
     if remote_bucket:
-        wr.s3.to_csv(df, path=remote_bucket)
-        log.info('CSV is now available at %s' % remote_bucket)
+        # wr.s3.to_csv(df, mode='a', path=remote_bucket, index=False, header=False)
+        wr.s3.to_csv(df, path=remote_bucket, mode='overwrite_partitions', dataset=True)
+        log.info('CSV is appending to %s' % remote_bucket)
 
     if local_write:
-        # df.to_csv(local_write, index=False, chunksize=chunk_size)
-        df.to_csv(local_write, index=False)
-        log.info('CSV is now available at %s' % local_write)
+        df.to_csv(local_write, index=False, mode='a', header=False)
+        log.info('CSV is appending to %s' % local_write)
 
 def main():
     try:
-        df = read_csv_data()
-        output_func(df)
+        read_csv_data()
     except:
         print("Error running script")
 
