@@ -10,11 +10,14 @@ import logging
 
 parser = argparse.ArgumentParser(description='Uses awswrangler to join csv files located in s3.')
 parser.add_argument('-b', '--bucketpath', type=str, help='S3 bucket with the path to .csv files. For example s3://remote-bucket/prefix/')
-parser.add_argument('-r', '--remotewrite', type=str, help='S3 bucket and file name to write to. For example s3://remote-bucket/prefix/')
+parser.add_argument('-r', '--remotewrite', type=str, help='S3 bucket and path to write to. Note this uploads as datasets. For example s3://remote-bucket/prefix/')
 parser.add_argument('-l', '--localwrite', type=str, help='Local directory path and filename to write to. ')
 parser.add_argument('-c', '--chunksize', type=int, default=10000, help='If specified, return an generator where chunksize is the number of rows to include in each chunk. Default is 100. ')
 parser.add_argument('-s', '--dataset', type=bool, default=False, help='If True read a CSV dataset instead of simple file(s) loading all the related partitions as columns. Default is False.')
-parser.add_argument('-u', '--usecols', action='append', help='If used return a subset of the columns.. For example firstName,lastName,dob')
+parser.add_argument('-u', '--usecols', action='append', help='If used return a subset of the columns.. For example -u firstName -u lastName -u dob')
+parser.add_argument('-d', '--delimiter', type=str, default=',', help='Delimiter used to separate values. Default is ,')
+parser.add_argument('-n', '--na_rep', type=str, default='NULL', help='Missing data representation.')
+parser.add_argument('-p', '--concurrent_partitioning', type=bool, default=False, help='If True will increase the parallelism level during the partitions writing. It will decrease the writing time and increase the memory usage.')
 
 
 # Not used, but included because Glue passes these arguments in
@@ -33,7 +36,9 @@ local_write = args.localwrite
 chunk_size = args.chunksize
 dataset = args.dataset
 usecols = args.usecols
-
+delimiter = args.delimiter
+na_rep = args.na_rep
+concurrent_partitioning = args.concurrent_partitioning
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -48,7 +53,7 @@ def read_csv_data():
 
         total_records = 0
 
-        df = wr.s3.read_csv(bucket_path, chunksize=chunk_size,header=0, usecols=usecols)
+        df = wr.s3.read_csv(bucket_path, chunksize=chunk_size,header=0, usecols=usecols, on_bad_lines='skip')
         for x in df:
             rows = len(x.index)
             log.info('Found Rows: %s' % rows)
@@ -60,12 +65,11 @@ def read_csv_data():
 
 def output_func(df):
     if remote_bucket:
-        # wr.s3.to_csv(df, mode='a', path=remote_bucket, index=False, header=False)
-        wr.s3.to_csv(df, path=remote_bucket, mode='overwrite_partitions', dataset=True)
+        wr.s3.to_csv(df, path=remote_bucket, mode='append', dataset=True, na_rep=na_rep, sep=delimiter, concurrent_partitioning=concurrent_partitioning)
         log.info('CSV is appending to %s' % remote_bucket)
 
     if local_write:
-        df.to_csv(local_write, index=False, mode='a', header=False)
+        df.to_csv(local_write, index=False, mode='a', header=False, na_rep=na_rep, sep=delimiter)
         log.info('CSV is appending to %s' % local_write)
 
 def main():
